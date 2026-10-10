@@ -1,0 +1,158 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/agri_market/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   @default("cliente") // 'cliente' | 'vendedor'
+  phone        String?  @default("")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  vendorProfile  VendorProfile?
+  products       Product[]
+  ordersAsClient Order[]         @relation("ClientOrders")
+  ordersAsVendor Order[]         @relation("VendorOrders")
+  cartItems      CartItem[]
+  sentMessages   Message[]       @relation("SentMessages")
+  receivedMsgs   Message[]       @relation("ReceivedMessages")
+  proposedEvents CalendarEvent[] @relation("ProposedEvents")
+  participantEvt CalendarEvent[] @relation("ParticipantEvents")
+
+  @@map("users")
+}
+
+model VendorProfile {
+  id           String  @id @default(cuid())
+  userId       String  @unique @map("user_id")
+  businessName String  @map("business_name")
+  description  String? @default("")
+  specialty    String  @default("Mercado General")
+  location     String? @default("")
+  coverImage   String? @map("cover_image")
+  coverImagePublic Boolean @default(true) @map("cover_image_public")
+  avatar       String?
+  avatarPublic Boolean @default(true) @map("avatar_public")
+  isFeatured   Boolean @default(false) @map("is_featured")
+  rating       Float   @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("vendor_profiles")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  vendorId    String   @map("vendor_id")
+  name        String
+  description String?  @default("")
+  price       Float
+  quantity    Int      @default(0) @map("quantity_available")
+  category    String
+  imageUrl    String?  @map("image_url")
+  imagePublic Boolean  @default(true) @map("image_public")
+  isActive    Boolean  @default(true) @map("is_active")
+  unit        String   @default("lb")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  vendor     User        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+  cartItems  CartItem[]
+
+  @@index([vendorId])
+  @@index([category])
+  @@map("products")
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  clientId    String   @map("client_id")
+  vendorId    String   @map("vendor_id")
+  status      String   @default("pendiente") // pendiente, confirmado, entregado, cancelado
+  totalAmount Float    @default(0) @map("total_amount")
+  notes       String?  @default("")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  client User        @relation("ClientOrders", fields: [clientId], references: [id])
+  vendor User        @relation("VendorOrders", fields: [vendorId], references: [id])
+  items  OrderItem[]
+
+  @@index([clientId])
+  @@index([vendorId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String @map("order_id")
+  productId String @map("product_id")
+  quantity  Int
+  unitPrice Float  @map("unit_price")
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model CartItem {
+  id        String @id @default(cuid())
+  clientId  String @map("client_id")
+  productId String @map("product_id")
+  quantity  Int    @default(1)
+
+  client  User    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, productId])
+  @@map("cart_items")
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  senderId   String   @map("sender_id")
+  receiverId String   @map("receiver_id")
+  content    String
+  isRead     Boolean  @default(false) @map("is_read")
+  orderRef   String?  @map("order_ref") // optional order id reference
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  sender   User @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, isRead])
+  @@map("messages")
+}
+
+model CalendarEvent {
+  id            String   @id @default(cuid())
+  proposerId    String   @map("proposer_id")
+  participantId String   @map("participant_id")
+  title         String
+  description   String?  @default("")
+  proposedDate  DateTime @map("proposed_date")
+  status        String   @default("propuesto") // propuesto, confirmado, rechazado
+  orderId       String?  @map("order_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  proposer    User @relation("ProposedEvents", fields: [proposerId], references: [id])
+  participant User @relation("ParticipantEvents", fields: [participantId], references: [id])
+
+  @@index([proposerId])
+  @@index([participantId])
+  @@map("calendar_events")
+}
